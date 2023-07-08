@@ -1,0 +1,15 @@
+{{.Title}}
+{{.TitleUnderline}}
+{{range $index, $controller := .Controllers}}
+.. csv-table:: {{$controller.Type}} ({{$controller.Filename}})
+   :header: "Method", "Module", "Controller", "Command", "Parameters"
+   :widths: 4, 15, 15, 30, 40
+{{range $index, $endpoint := $controller.Endpoints}}
+    "``{{$endpoint.Method}}``","{{$endpoint.Module}}","{{$endpoint.Controller}}","{{$endpoint.Command}}","{{$endpoint.Parameters}}"
+{{end}}
+{{if $controller.Uses}}
+{{range $index, $use := $controller.Uses}}
+    "``<<uses>>``", "", "", "", "*{{$use.Type}}* `{{$use.Name}} <{{$use.Link}}>`__"
+{{end}}
+{{end}}
+{{end}}

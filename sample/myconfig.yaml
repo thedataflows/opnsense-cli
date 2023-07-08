@@ -1,0 +1,6 @@
+log-level: warn
+# log-format: json
+
+opnsense-key: xyz
+opnsense-secret: abc
+opnsense-url: https://opnsense.local
