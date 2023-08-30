@@ -9,6 +9,10 @@ linters-settings:
     # The maximal code complexity to report.
     # Default: 10
     max-complexity: 22
+  gocognit:
+    # The maximal code complexity to report.
+    # Default: 10
+    min-complexity: 41
   lll:
     # max line length, lines longer will be reported. Default is 120.
     # '\t' is counted as 1 character by default, and can be changed with the tab-width option
@@ -35,6 +39,6 @@ linters:
 
 run:
   timeout: 5m
-  go: '1.20'
+  go: '1.21'
   issues-exit-code: 1
   modules-download-mode: readonly

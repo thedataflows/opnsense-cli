@@ -6,8 +6,7 @@ archives:
         format: zip
     files:
       - README.md
-      - core.yaml
-      - plugins.yaml
+      - "*.yaml"
     name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     rlcp: true
 builds:

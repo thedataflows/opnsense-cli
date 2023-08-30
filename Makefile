@@ -2,7 +2,7 @@
 
 MAKEFLAGS += --silent
 
-GOLANGCI_LINT_VERSION = v1.52.2
+GOLANGCI_LINT_VERSION = v1.54.2
 
 all: help
 
@@ -52,9 +52,8 @@ test-perf:
 tools:
 	go install golang.org/x/tools/cmd/goimports@latest
 
-## apigen: Generate API commands
-apigen:
-	go run generator/opnsense/collect_api_endpoints.go --repo core
-	go run generator/opnsense/collect_api_endpoints.go --repo plugins
+## generate: Generate API commands
+generate:
+	go run generator/opnsense/collect_api_endpoints.go
 
 .PHONY: lint fmt tidy pre-commit test test-perf
