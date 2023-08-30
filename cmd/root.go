@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/iancoleman/strcase"
 	"github.com/thedataflows/go-commons/pkg/config"
 	"github.com/thedataflows/opnsense-cli/pkg/constants"
 
@@ -18,6 +19,7 @@ const (
 	keyCommonOpnSenseKey         = "opnsense-key"
 	keyCommonOpnSenseSecret      = "opnsense-secret"
 	keyCommonOpnSenseURLInsecure = "opnsense-url-insecure"
+	keyCommonOpnSenseSecretFile  = "opnsense-secret-file"
 )
 
 var (
@@ -27,9 +29,13 @@ var (
 		Short: "OPNSense command line interface",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Long = fmt.Sprintf(
-				"%s\n\nAll flags values can be provided via env vars starting with %s_*\nTo pass a command (e.g. 'command1') flag, use %s_COMMAND1_FLAGNAME=somevalue",
+				"%s\n\nAll flags values can be provided via env vars starting with %s_*\nExamples:\n- %s_%s=opnsenseapikeyname\n- %s_%s=opnsenseapisecret\nTo pass a command (e.g. 'command1') flag, use %s_COMMAND1_FLAGNAME=somevalue",
 				cmd.Short,
 				configOpts.EnvPrefix,
+				configOpts.EnvPrefix,
+				strcase.ToScreamingSnake(keyCommonOpnSenseKey),
+				configOpts.EnvPrefix,
+				strcase.ToScreamingSnake(keyCommonOpnSenseSecret),
 				configOpts.EnvPrefix,
 			)
 
@@ -55,6 +61,7 @@ func init() {
 	rootCmd.PersistentFlags().String(keyCommonOpnSenseURL, "https://opnsense.local", "OPNSense URL")
 	rootCmd.PersistentFlags().String(keyCommonOpnSenseKey, "", "OPNSense Key. See https://docs.opnsense.org/development/api.html#introduction")
 	rootCmd.PersistentFlags().String(keyCommonOpnSenseSecret, "", "OPNSense Secret")
+	rootCmd.PersistentFlags().String(keyCommonOpnSenseSecretFile, "", "Optional OPNSense Key and Secret File (downloaded from gui)")
 	rootCmd.PersistentFlags().Bool(keyCommonOpnSenseURLInsecure, false, "OPNSense URL is Insecure")
 
 	config.ViperBindPFlagSet(rootCmd, rootCmd.PersistentFlags())

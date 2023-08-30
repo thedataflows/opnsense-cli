@@ -1,0 +1,7 @@
+- name: install-plugin
+  commands:
+    - core/firmware/install
+    - core/firmware/syncPlugins
+- name: firewall-rules
+  commands:
+    - firewall/filter/searchRule

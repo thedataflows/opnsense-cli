@@ -13,16 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	"github.com/thedataflows/go-commons/pkg/config"
 	"github.com/thedataflows/go-commons/pkg/file"
 	"github.com/thedataflows/go-commons/pkg/log"
-	"gopkg.in/yaml.v3"
 
 	"github.com/spf13/cobra"
-)
-
-const (
-	keyRawCommandCommandsFile = "commands-file"
 )
 
 type Command struct {
@@ -31,10 +27,6 @@ type Command struct {
 	Command    string   `yaml:"command"`
 	Method     string   `yaml:"method"`
 	Parameters []string `yaml:"parameters,omitempty"`
-}
-
-type RawCommand struct {
-	Commands []Command `yaml:"commands"`
 }
 
 var (
@@ -52,7 +44,7 @@ func init() {
 
 	var commandsFile string
 	// Set persistent flags instead of local flags to be able to use them in subcommands
-	cmdRawCommand.PersistentFlags().StringVar(&commandsFile, keyRawCommandCommandsFile, "core.yaml", "Commands file")
+	cmdRawCommand.PersistentFlags().StringVar(&commandsFile, "commands-file", "raw-commands.yaml", "Commands file")
 	// force parsing of flags
 	_ = cmdRawCommand.ParseFlags(os.Args)
 
@@ -67,8 +59,8 @@ func init() {
 		log.Fatal(err)
 	}
 
-	var rawCommand RawCommand
-	err = yaml.Unmarshal(contents, &rawCommand)
+	var rawCommands []Command
+	err = yaml.UnmarshalWithOptions(contents, &rawCommands, yaml.Strict())
 	if err != nil {
 		log.Fatalf("Failed to parse file %s: %v", commandsFile, err)
 	}
@@ -77,7 +69,7 @@ func init() {
 	apiCategory = apiCategory[:len(apiCategory)-len(filepath.Ext(apiCategory))]
 
 	// Add subcommands
-	for _, subcommand := range rawCommand.Commands {
+	for _, subcommand := range rawCommands {
 		group := &cobra.Group{
 			ID:    fmt.Sprintf("%s/%s", subcommand.Module, subcommand.Controller),
 			Title: fmt.Sprintf("Module: %s, Controller: %s", subcommand.Module, subcommand.Controller),
@@ -104,9 +96,27 @@ func init() {
 				if len(args) > 0 {
 					callingURL = fmt.Sprintf("%s/%s", callingURL, strings.Join(args, "/"))
 				}
-				log.Infof("Calling %s", callingURL)
 				opnsenseKey := config.ViperGetString(cmd.Root(), keyCommonOpnSenseKey)
 				opnsenseSecret := config.ViperGetString(cmd.Root(), keyCommonOpnSenseSecret)
+				opnsenseSecretFile := config.ViperGetString(cmd.Root(), keyCommonOpnSenseSecretFile)
+				if (len(opnsenseKey) == 0 || len(opnsenseSecret) == 0) && len(opnsenseSecretFile) > 0 {
+					contents, err := os.ReadFile(opnsenseSecretFile)
+					if err != nil {
+						log.Fatal(err)
+					}
+					lines := strings.Split(string(contents), "\n")
+					if len(lines) < 2 {
+						log.Fatalf("Key/Secret file %s must contain key= and secret= fields", opnsenseSecretFile)
+					}
+					for _, l := range lines {
+						if strings.HasPrefix(l, "key=") {
+							opnsenseKey = l[4:]
+						}
+						if strings.HasPrefix(l, "secret=") {
+							opnsenseSecret = l[7:]
+						}
+					}
+				}
 				log.Debugf("Key: %s, Secret: %s", opnsenseKey, opnsenseSecret)
 
 				callOpnSenseAPI(
@@ -127,6 +137,8 @@ func RunRawCommand(cmd *cobra.Command, _ []string) {
 }
 
 func callOpnSenseAPI(url string, method string, key string, secret string, insecure bool) {
+	log.Infof("%s %s", method, url)
+
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: insecure,
@@ -154,7 +166,7 @@ func callOpnSenseAPI(url string, method string, key string, secret string, insec
 	var data interface{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
-		log.Fatalf("Error parsing response body: %s", err)
+		log.Fatalf("Error parsing response body: %s\n%s", err, body)
 	}
 	prettyJSON, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
