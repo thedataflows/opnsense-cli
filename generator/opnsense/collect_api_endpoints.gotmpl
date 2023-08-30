@@ -1,14 +1,14 @@
 {{- range $index, $controller := .Controllers}}
 {{- range $index, $endpoint := $controller.Endpoints}}
-  - module: {{$endpoint.Module}}
-    controller: {{$endpoint.Controller}}
-    command: {{$endpoint.Command}}
-    method: "{{$endpoint.Method}}"
+- module: {{$endpoint.Module}}
+  controller: {{$endpoint.Controller}}
+  command: {{$endpoint.Command}}
+  method: "{{$endpoint.Method}}"
 {{- if gt (len $endpoint.Parameters) 0}}
-    parameters:
-    {{- range $index, $param := $endpoint.Parameters}}
-      - {{$param}}
-    {{- end}}
+  parameters:
+  {{- range $index, $param := $endpoint.Parameters}}
+    - {{$param}}
+  {{- end}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

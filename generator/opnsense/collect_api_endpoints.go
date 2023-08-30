@@ -100,10 +100,30 @@ type TemplateData struct {
 	Controllers    []Controller
 }
 
+type stringSlice []string
+
+func (s *stringSlice) String() string {
+	return fmt.Sprintf("%v", *s)
+}
+
+func (s *stringSlice) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
+func (s *stringSlice) len() int {
+	return len(*s)
+}
+
 func parseAPIPHP(srcFilename string) []Endpoint {
 	baseFilename := filepath.Base(srcFilename)
 	splitPath := strings.Split(srcFilename, "/")
-	controller := strings.ToLower(strings.ReplaceAll(strings.Split(baseFilename, "Controller.php")[0], "(?<!^)(?=[A-Z])", "_"))
+	controller := strings.ToLower(
+		regexp.MustCompile(`([a-z0-9])([A-Z])`).ReplaceAllString(
+			filepath.Base(strings.Split(baseFilename, "Controller.php")[0]),
+			"${1}_${2}",
+		),
+	)
 	moduleName := strings.ToLower(splitPath[len(splitPath)-3])
 
 	data, err := os.ReadFile(srcFilename)
@@ -185,7 +205,7 @@ func parseAPIPHP(srcFilename string) []Endpoint {
 			case strings.Contains(codeBlock, "$this->toggleBase"):
 				record.Method = PostMethod
 			case strings.Contains(codeBlock, "$this->searchBase"):
-				record.Method = "*"
+				record.Method = "GET"
 			}
 			result = append(result, record)
 		}
@@ -216,22 +236,22 @@ func parseAPIPHP(srcFilename string) []Endpoint {
 	return result
 }
 
-func sourceURL(repo string, srcFilename string) string {
-	parts := strings.Split(srcFilename, "/")
-	if repo == "plugins" {
-		return fmt.Sprintf("https://github.com/opnsense/plugins/blob/master/%s", strings.Join(parts[findIndex(parts, "src")-2:], "/"))
-	}
-	return fmt.Sprintf("https://github.com/opnsense/core/blob/master/%s", strings.Join(parts[findIndex(parts, "src"):], "/"))
-}
+// func sourceURL(repo string, srcFilename string) string {
+// 	parts := strings.Split(srcFilename, "/")
+// 	if repo == "plugins" {
+// 		return fmt.Sprintf("https://github.com/opnsense/plugins/blob/master/%s", strings.Join(parts[findIndex(parts, "src")-2:], "/"))
+// 	}
+// 	return fmt.Sprintf("https://github.com/opnsense/core/blob/master/%s", strings.Join(parts[findIndex(parts, "src"):], "/"))
+// }
 
-func findIndex(slice []string, val string) int {
-	for i, item := range slice {
-		if item == val {
-			return i
-		}
-	}
-	return -1
-}
+// func findIndex(slice []string, val string) int {
+// 	for i, item := range slice {
+// 		if item == val {
+// 			return i
+// 		}
+// 	}
+// 	return -1
+// }
 
 func contains(slice []string, val string) bool {
 	for _, item := range slice {
@@ -295,44 +315,49 @@ func cloneGitRepo(repoURL string, destinationDir string) {
 }
 
 func main() {
-	sourceDir := flag.String("source", "", "source directory")
-	repo := flag.String("repo", "core", "target repository")
-	outputFile := flag.String("output", "", "output file")
+	var sourceDirs stringSlice
+	flag.Var(&sourceDirs, "source", "source directories")
+	var repos stringSlice = []string{"core", "plugins"}
+	flag.Var(&repos, "repo", "target repository")
+	outputFile := flag.String("output", "raw-commands.yaml", "output file")
 	flag.Parse()
 
-	if *sourceDir == "" {
-		*sourceDir = filepath.Join(os.TempDir(), *repo)
-		cloneGitRepo(fmt.Sprintf("https://github.com/opnsense/%s.git", *repo), *sourceDir)
+	// Source directories override default source repositories
+	if sourceDirs.len() == 0 {
+		for _, repo := range repos {
+			sourceDir := filepath.Join(os.TempDir(), repo)
+			sourceDirs = append(sourceDirs, filepath.Join(os.TempDir(), repo))
+			cloneGitRepo(fmt.Sprintf("https://github.com/opnsense/%s.git", repo), sourceDir)
+		}
 	}
 
 	allModules := map[string][][]Endpoint{}
-	err := filepath.Walk(*sourceDir, func(path string, info os.FileInfo, err error) error {
-		path = filepath.ToSlash(path)
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || !strings.HasSuffix(strings.ToLower(path), "controller.php") || !strings.Contains(strings.ToLower(path), "mvc/app/controllers") || strings.Contains(strings.ToLower(path), excludeControllers) {
-			return nil
-		}
-		payload := parseAPIPHP(path)
-		if len(payload) > 0 {
-			sPath := strings.Split(filepath.Dir(filepath.Dir(path)), "\\")
-			moduleName := strings.ToLower(sPath[len(sPath)-1])
-			if _, ok := allModules[moduleName]; !ok {
-				allModules[moduleName] = [][]Endpoint{}
+	for _, sourceDir := range sourceDirs {
+		err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+			path = filepath.ToSlash(path)
+			if err != nil {
+				return err
 			}
-			allModules[moduleName] = append(allModules[moduleName], payload)
+			if info.IsDir() || !strings.HasSuffix(strings.ToLower(path), "controller.php") || !strings.Contains(strings.ToLower(path), "mvc/app/controllers") || strings.Contains(strings.ToLower(path), excludeControllers) {
+				return nil
+			}
+			payload := parseAPIPHP(path)
+			if len(payload) > 0 {
+				sPath := strings.Split(filepath.Dir(filepath.Dir(path)), "\\")
+				moduleName := strings.ToLower(sPath[len(sPath)-1])
+				if _, ok := allModules[moduleName]; !ok {
+					allModules[moduleName] = [][]Endpoint{}
+				}
+				allModules[moduleName] = append(allModules[moduleName], payload)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Fatalf("Error walking path: %v", err)
 		}
-		return nil
-	})
-	if err != nil {
-		log.Fatalf("Error walking path: %v", err)
 	}
 
 	// Write to file
-	if len(*outputFile) == 0 {
-		*outputFile = fmt.Sprintf("%s.yaml", *repo)
-	}
 	log.Printf("Output file: %s", *outputFile)
 	fOut, err := os.Create(filepath.Clean(*outputFile))
 	if err != nil {
@@ -340,7 +365,7 @@ func main() {
 	}
 	defer fOut.Close()
 
-	fmt.Fprint(fOut, "commands:")
+	fmt.Fprint(fOut, "# Raw commands:")
 
 	// prepare the template
 	templateFilename := fmt.Sprintf("%s.gotmpl", *outputFile)
@@ -375,7 +400,7 @@ func main() {
 			if controller[0].ModelFilename != "" {
 				payload.Uses = append(payload.Uses, map[string]string{
 					"Type": "model",
-					"Link": sourceURL(*repo, controller[0].ModelFilename),
+					// "Link": sourceURL(*repo, controller[0].ModelFilename),
 					"Name": filepath.Base(controller[0].ModelFilename),
 				})
 			}
